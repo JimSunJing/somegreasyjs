@@ -6,6 +6,7 @@
 // @description:zh-cn   保存豆瓣广播内容到本地
 // @author              JimSunJing
 // @match               https://www.douban.com/people/*/statuses*
+// @require             https://unpkg.com/dexie/dist/dexie.js
 // @license             MIT
 // ==/UserScript==
 
@@ -13,6 +14,7 @@
   'use strict';
   // 获取网页中每个广播对象
   let statuses;
+  const DB_NAME = "dbBoardast";
 
   // inject style
   const injectStyle = () => {
@@ -41,7 +43,15 @@
     document.head.appendChild(style);
   }
 
-  const addBtn = () => {
+  // create button
+  const createBtnS = (innerT = '') => {
+    let btn = document.createElement("button");
+    btn.classList.add("btnS");
+    btn.innerText = innerT;
+    return btn;
+  }
+
+  const addScriptBtn = () => {
     // 在网页旁边的用户信息栏下添加按钮
     const aside = document.querySelector(".aside");
 
@@ -51,22 +61,26 @@
     aside.appendChild(newBtnContainer);
 
     // 开始备份信息的按钮
-    const btnBackup = document.createElement("button");
-    btnBackup.classList.add("btnS");
-    btnBackup.innerText = "备份该页广播";
-    btnBackup.addEventListener("click", backupStatuses);
+    const btnBackup = createBtnS("备份该页广播");
+    btnBackup.addEventListener("click", saveDexie);
 
     newBtnContainer.appendChild(btnBackup);
     newBtnContainer.appendChild(document.createElement("br"));
 
+    // 添加清空 Dexie 按钮
+    const btnClearDexie = createBtnS("清空数据");
+    btnClearDexie.addEventListener("click", clearDexie);
+
+    newBtnContainer.appendChild(btnClearDexie);
+    newBtnContainer.appendChild(document.createElement("br"));
+
     // 添加设置 Notion 信息的按钮
-    const btnNotionToken = document.createElement("button");
-    btnNotionToken.classList.add("btnS");
-    btnNotionToken.innerText = "输入Notion信息";
+    const btnNotionToken = createBtnS("输入Notion信息");
     btnNotionToken.addEventListener("click", notionInput);
 
     newBtnContainer.appendChild(btnNotionToken);
     newBtnContainer.appendChild(document.createElement("br"));
+
 
 
     // 为每个广播添加伪删除按钮​
@@ -76,21 +90,18 @@
       container.style.display = 'flex';
       container.style.justifyContent = 'flex-end';
 
-      const hide = document.createElement("button");
-      hide.classList.add('btnS');
-      hide.innerText = '隐藏';
-      
+      const hide = createBtnS("隐藏");
       container.appendChild(hide);
 
       // 如果是转发的动态, 在按按钮的时候会跳转, 需要修改按钮位置
-      if(/^status-real.*/.test(statuses[i].parentElement.className) && statuses[i-1]){
+      if (/^status-real.*/.test(statuses[i].parentElement.className) && statuses[i - 1]) {
         hide.innerText = '↓隐藏↓';
-        statuses[i-1].appendChild(container);
+        statuses[i - 1].appendChild(container);
         hide.addEventListener("click", () => {
           container.parentElement.nextElementSibling.remove();
           container.remove();
         })
-      }else {
+      } else {
         statuses[i].appendChild(container);
         hide.addEventListener("click", () => {
           container.parentElement.remove();
@@ -140,7 +151,7 @@
     tokenInput.setAttribute("type", "text")
     tokenInput.setAttribute("name", "NOTION_TOKEN");
     inputForm.appendChild(tokenInput);
-    
+
     let databaseIdInput = document.createElement("input");
     databaseIdInput.classList.add("newInput");
     databaseIdInput.setAttribute("placeholder", "输入Database id");
@@ -149,17 +160,15 @@
     databaseIdInput.setAttribute("name", "NOTION_DATABASEID");
     inputForm.appendChild(databaseIdInput);
 
-    let submitBtn = document.createElement("button");
-    submitBtn.classList.add("btnS");
+    let submitBtn = createBtnS("保存");
     submitBtn.setAttribute("type", "submit");
-    submitBtn.innerText = "保存";
     inputForm.appendChild(document.createElement("br"));
     inputForm.appendChild(submitBtn);
   }
 
   // 使用 prompt 要求用户输入
   const requestInput = (name) => {
-    const request = prompt(`请输入${name}\n不清楚可以查看教程`);
+    const request = prompt(`请输入${name}\n不清楚可以查看教程:\ngithub.com/JimSunJing/somegreasyjs`);
     checkNotionInput(name, request);
   }
 
@@ -168,14 +177,14 @@
     clearStorage(name);
     if (name === 'NOTION_TOKEN') {
       if (!request || !/^secret_\S{43}$/.test(request)) {
-        alert(`${name}输入失败.格式不对, 应该是 'secret_' 开头的字符串\n不清楚可以查看教程`);
+        alert(`${name}输入失败.格式不对, 应该是 'secret_' 开头的字符串\n不清楚可以查看教程:\ngithub.com/JimSunJing/somegreasyjs`);
       } else {
         localStorage.setItem(name, request);
       }
       console.log('token stored:', localStorage.getItem("NOTION_TOKEN") ? localStorage.getItem("NOTION_TOKEN").substring(0, 10) : '');
     } else if (name === 'NOTION_DATABASEID') {
       if (!request || !/^\S{32}$/.test(request)) {
-        alert(`${name}输入失败.格式不对, 应该是 32 个字符的一串字符串, 比如:4374cc1974d749129faf91438039df08\n不清楚可以查看教程`)
+        alert(`${name}输入失败.格式不对, 应该是 32 个字符的一串字符串, 比如:4374cc1974d749129faf91438039df08\n不清楚可以查看教程:\ngithub.com/JimSunJing/somegreasyjs`)
       } else {
         localStorage.setItem(name, request);
       }
@@ -193,40 +202,99 @@
     updateStatuses();
 
     // extract status info from web
-    const savedStatus = [];
-    for (let i = 0; i < statuses.length; i++){
+    const savedStatuses = [];
+    for (let i = 0; i < statuses.length; i++) {
       // extract pure text of status
-      const match = statuses[i].innerText.replace('\n','').match(/^.*(?=\s\d*?回应.*)|^.+/s);
-      // author uid
-      const uid = statuses[i].getAttribute("data-uid");
+      const match = statuses[i].innerText;
+      const full = match ? match.replace('\n', '').match(/^.*(?=\s\d*?回应.*)|^.+/s)[0] : "";
+      let saying = "";
+      if (match.indexOf("\n\n") > -1) {
+        saying = match ? match.split('\n\n')[1] : "";
+      } else {
+        const t = match ? match.replace('\n', '').match(/^(.*\s转发:)(.*)(?=\s\d*?回应.*)|^.+/s)[2] : "";
+        saying = t ? t.match(/^.*(?=\n.*)/)[0] : "";
+      }
+      let uid, sid, time, link;
       // status sid
-      const sid = statuses[i].getAttribute("data-sid");
+      sid = statuses[i].getAttribute("data-sid");
+      // author uid
+      uid = statuses[i].getAttribute("data-uid");
+      if (uid === null) {
+        uid = document.querySelector(".aside .content a").href.match(/(?<=https:\/\/www.douban.com\/people\/).*(?=\/)/);
+        link = statuses[i].querySelector(".created_at a").href;
+      } else {
+        link = `https://www.douban.com/people/${uid}/status/${sid}/`;
+      }
       // status create time
-      const time = statuses[i].querySelector(".created_at").getAttribute("title");
+      time = statuses[i].querySelector(".created_at").getAttribute("title");
 
       let row = {
-        text: match[0],
-        uid: uid,
+        id: sid,
         sid: sid,
-        link: `https://www.douban.com/people/${uid}/status/${sid}/`,
+        saying: saying,
+        full: full,
+        uid: uid,
+        link: link,
         created: time
       }
       // img links
       let pics = statuses[i].getElementsByClassName("pics-wrapper");
       let picLinks = [];
-      if (pics && pics.length > 0){
+      if (pics && pics.length > 0) {
         picLinks = pics[0].innerHTML.match(/(?<=<img src=")(.*?)(?=".*>)/g);
-        picLinks.map((e,i) => {
+        picLinks.map((e, i) => {
           row[`img${i}`] = e;
         })
       }
-      if (match) savedStatus.push(row);
+      if (match) savedStatuses.push(row);
     }
 
-    // save statuses in localStorage?
-
-    console.log('saved statuses',savedStatus);
+    // save statuses in Dexie
+    console.log('saved statuses', savedStatuses);
+    return savedStatuses;
   }
+
+
+  // save into Dexie
+  const saveDexie = () => {
+    const db = new Dexie(DB_NAME);
+
+    db.version(1).stores({
+      status: `
+        id,sid,saying,full,uid,link,created,
+        img0,img1,img2,img3,img4,img5,img6,img7,img8,img9
+      `
+    });
+
+    const statuses = backupStatuses();
+    db.status.bulkPut(statuses)
+      .then(() => {
+        console.log(`saved ${statuses.length} statuses.`);
+        db.status.toCollection().count(count => {
+          console.log(`Dexie current stores:`, count);
+        })
+        let nextPage = document.querySelector(".paginator span.next a").href;
+        const cont = localStorage.getItem("cont");
+        if (nextPage && cont !== null && Number(cont) > 0) {
+          nextPage = nextPage + `&cont=${Number(cont) - 1}`;
+          localStorage.setItem("cont", Number(cont) - 1);
+          window.location.href = nextPage;
+        }
+      }).catch(e => {
+        console.error("error:", e);
+      });
+  
+  }
+
+
+  const clearDexie = () => {
+    Dexie.delete(DB_NAME).then(() => {
+      console.log("Database successfully deleted");
+    }).catch((err) => {
+      console.error("Could not delete database",err);
+    });
+  }
+
 
   // 导出CSV函数
   // https://github.com/liqingzheng/pc/blob/master/JsonExportToCSV.js
@@ -328,19 +396,35 @@
       var Sys = {};
       var ua = navigator.userAgent.toLowerCase();
       var s;
-      (s = ua.indexOf('edge') !== -1 ? Sys.edge = 'edge' : ua.match(/rv:([\d.]+)\) like gecko/)) ? Sys.ie = s[1]:
+      (s = ua.indexOf('edge') !== -1 ? Sys.edge = 'edge' : ua.match(/rv:([\d.]+)\) like gecko/)) ? Sys.ie = s[1] :
         (s = ua.match(/msie ([\d.]+)/)) ? Sys.ie = s[1] :
-        (s = ua.match(/firefox\/([\d.]+)/)) ? Sys.firefox = s[1] :
-        (s = ua.match(/chrome\/([\d.]+)/)) ? Sys.chrome = s[1] :
-        (s = ua.match(/opera.([\d.]+)/)) ? Sys.opera = s[1] :
-        (s = ua.match(/version\/([\d.]+).*safari/)) ? Sys.safari = s[1] : 0;
+          (s = ua.match(/firefox\/([\d.]+)/)) ? Sys.firefox = s[1] :
+            (s = ua.match(/chrome\/([\d.]+)/)) ? Sys.chrome = s[1] :
+              (s = ua.match(/opera.([\d.]+)/)) ? Sys.opera = s[1] :
+                (s = ua.match(/version\/([\d.]+).*safari/)) ? Sys.safari = s[1] : 0;
       return Sys;
     }
   };
 
-  // 添加样式
-  injectStyle();
-  updateStatuses();
-  addBtn();
+
+  const init = () => {
+    setTimeout(() => {
+      if (document.querySelector('.pl2') !== null) {
+        injectStyle();
+        updateStatuses();
+        addScriptBtn();
+      }
+    }, 500)
+  }
+
+  // 自动翻页判断
+  if (location.href.indexOf('cont=') > -1) {
+    // 自动翻页保存
+    saveDexie();
+  } else {
+    // 初次使用 && 自定义页面
+    clearStorage("cont");
+    init();
+  }
 
 })();
