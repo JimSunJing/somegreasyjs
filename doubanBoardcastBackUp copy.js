@@ -82,13 +82,19 @@
     newBtnContainer.appendChild(btnExportCSV);
     newBtnContainer.appendChild(document.createElement("br"));
     
+    // 添加设置 Notion 信息的按钮
+    const btnNotionToken = createBtnS("输入Notion信息");
+    btnNotionToken.addEventListener("click", notionInput);
+    
+    newBtnContainer.appendChild(btnNotionToken);
+    newBtnContainer.appendChild(document.createElement("br"));
+    
     // notification
     const noti = document.createElement("p");
     noti.id = 'scriptNoti';
     newBtnContainer.appendChild(noti);
     
-    // 自动翻页保存的表格
-    autoForm();
+    
     
     // 为每个广播添加伪删除按钮​
     for (let i = 0; i < statuses.length; i++) {
@@ -119,48 +125,95 @@
     }
   }
 
-  // 设置自动备份
-  const autoForm = () => {
+
+  const updateStatuses = () => {
+    statuses = document.getElementsByClassName("status-item");
+  }
+
+
+  // 检查存储是否拥有 Notion 相关的 token 和 id
+  const checkNotionToken = () => {
+    const NOTION_TOKEN = localStorage.getItem("NOTION_TOKEN");
+    const NOTION_DATABASEID = localStorage.getItem("NOTION_DATABASEID");
+    if (!NOTION_TOKEN || NOTION_TOKEN.length === 0) {
+      alert('NOTION INTEGRATION TOKEN 未输入');
+      return false;
+    }
+    if (!NOTION_DATABASEID || NOTION_DATABASEID.length === 0) {
+      alert("NOTION DATABASE ID 未输入");
+      return false;
+    }
+    return [NOTION_TOKEN, NOTION_DATABASEID];
+  }
+
+
+  // 要求输入 Notion Token 和 Database Id
+  const notionInput = () => {
     // add input
     let area = document.querySelector(".newBtnContainer");
     if (!area) {
       alert("脚本运行错误, 请刷新重试!");
       return null;
     }
-    if (document.getElementById('auto-form') !== null) {
+    if (document.getElementById('notion-token-form') !== null) {
       return null;
     }
     let inputForm = document.createElement("form");
-    inputForm.id = 'auto-form';
+    inputForm.id = 'notion-token-form';
     inputForm.addEventListener("submit", e => {
       e.preventDefault();
-      alert(`form cont ${inputForm.elements.CONT.value}`);
-      localStorage.setItem("cont", Math.floor(Number(inputForm.elements.CONT.value)));
-      alert(`local storage cont: ${localStorage.getItem("cont")}`);
-      window.location.href = location.href + '&cont=' + localStorage.getItem("cont");
+      checkNotionInput('NOTION_TOKEN', inputForm.elements.NOTION_TOKEN);
+      checkNotionInput('NOTION_DATABASEID', inputForm.elements.NOTION_DATABASEID);
     })
     area.appendChild(inputForm);
 
-    let contInput = document.createElement("input");
-    contInput.classList.add("newInput");
-    contInput.setAttribute("placeholder", "输入要自动备份的页数");
-    contInput.setAttribute("required", '');
-    contInput.setAttribute("type", "number");
-    contInput.setAttribute("name", "CONT");
-    contInput.setAttribute("step", "1");
-    inputForm.appendChild(contInput);
+    let tokenInput = document.createElement("input");
+    tokenInput.classList.add("newInput");
+    tokenInput.setAttribute("placeholder", "输入 Notion Token");
+    tokenInput.setAttribute("required", '');
+    tokenInput.setAttribute("type", "text")
+    tokenInput.setAttribute("name", "NOTION_TOKEN");
+    inputForm.appendChild(tokenInput);
 
-    let submitBtn = createBtnS("开始");
+    let databaseIdInput = document.createElement("input");
+    databaseIdInput.classList.add("newInput");
+    databaseIdInput.setAttribute("placeholder", "输入Database id");
+    databaseIdInput.setAttribute("required", '');
+    databaseIdInput.setAttribute("type", "text");
+    databaseIdInput.setAttribute("name", "NOTION_DATABASEID");
+    inputForm.appendChild(databaseIdInput);
+
+    let submitBtn = createBtnS("保存");
     submitBtn.setAttribute("type", "submit");
     inputForm.appendChild(document.createElement("br"));
     inputForm.appendChild(submitBtn);
-
+    inputForm.appendChild(document.createElement("br"));
+    
+    let tips = document.createElement("p");
+    tips.innerText = "不清楚请查看: \nnotion.so/my-integrations\nbilibili.com/video/BV17h411v7hm"
+    inputForm.appendChild(tips);
   }
 
-  const updateStatuses = () => {
-    statuses = document.getElementsByClassName("status-item");
-  }
+  // 检查并设置输入
+  const checkNotionInput = (name, request) => {
+    clearStorage(name);
+    if (name === 'NOTION_TOKEN') {
+      if (!request || !/^secret_\S{43}$/.test(request)) {
+        alert(`${name}输入失败.格式不对, 应该是 'secret_' 开头的字符串\n不清楚可以查看教程:\ngithub.com/JimSunJing/somegreasyjs`);
+      } else {
+        localStorage.setItem(name, request);
+      }
+      console.log('token stored:', localStorage.getItem("NOTION_TOKEN") ? localStorage.getItem("NOTION_TOKEN").substring(0, 10) : '');
+    } else if (name === 'NOTION_DATABASEID') {
+      if (!request || !/^\S{32}$/.test(request)) {
+        alert(`${name}输入失败.格式不对, 应该是 32 个字符的一串字符串, 比如:4374cc1974d749129faf91438039df08\n不清楚可以查看教程:\ngithub.com/JimSunJing/somegreasyjs`)
+      } else {
+        localStorage.setItem(name, request);
+      }
+      console.log('databaseId stored:', localStorage.getItem("NOTION_DATABASEID") ? localStorage.getItem("NOTION_DATABASEID").substring(0, 10) : '');
+    }
 
+  }
 
   const clearStorage = (name) => {
     localStorage.removeItem(name);
@@ -227,7 +280,7 @@
     }
 
     // save statuses in Dexie
-    // console.log('saved statuses', savedStatuses);
+    console.log('saved statuses', savedStatuses);
     return savedStatuses;
   }
 
@@ -295,11 +348,20 @@
 
       JSonToCSV.setDataConver({
         data: data,
-        fileName: 'test' + new Date().toISOString(),
+        fileName: 'test' + new Date().toISOString().
+          replace(/(\d{4}-\d{2}-d{2})T(\d{2}:\d{2}):\d{3}Z$/,'$1_$2'),
         columns: {title, key}
       })
-      // console.log("pack:", data);
+      console.log("pack:", data);
     })
+  }
+
+  const exportNotion = () => {
+    const check = checkNotionToken();
+    if (check && check.length === 2){
+      const [TOKEN, DID] = check;
+      
+    }
   }
 
 
@@ -415,29 +477,23 @@
 
 
   const init = () => {
-    // 自动翻页判断
-    if (location.href.indexOf('cont=') > -1) {
-      if (location.href.indexOf('cont=0') > -1){
-        saveDexie();
-        window.location.href = location.href.split("&cont=0")[0];
+    setTimeout(() => {
+      if (document.querySelector('.pl2') !== null) {
+        injectStyle();
+        updateStatuses();
+        addScriptBtn();
       }
-      // 自动翻页保存
-      setTimeout(() => {
-        saveDexie();
-      }, 1500)
-    } else {
-      // 初次使用 && 自定义页面
-      clearStorage("cont");
-      injectStyle();
-      updateStatuses();
-      addScriptBtn();
-    }
+    }, 500)
   }
-  
-  setTimeout(() => {
-    if (document.querySelector('.pl2') !== null) {
-      init();
-    }
-  }, 500)
-  
+
+  // 自动翻页判断
+  if (location.href.indexOf('cont=') > -1) {
+    // 自动翻页保存
+    saveDexie();
+  } else {
+    // 初次使用 && 自定义页面
+    clearStorage("cont");
+    init();
+  }
+
 })();
