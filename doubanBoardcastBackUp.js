@@ -59,30 +59,42 @@
     const newBtnContainer = document.createElement("div");
     newBtnContainer.classList.add("newBtnContainer");
     aside.appendChild(newBtnContainer);
-
+    
     // 开始备份信息的按钮
     const btnBackup = createBtnS("备份该页广播");
     btnBackup.addEventListener("click", saveDexie);
-
+    
     newBtnContainer.appendChild(btnBackup);
     newBtnContainer.appendChild(document.createElement("br"));
-
+    
     // 添加清空 Dexie 按钮
     const btnClearDexie = createBtnS("清空数据");
     btnClearDexie.addEventListener("click", clearDexie);
-
+    
     newBtnContainer.appendChild(btnClearDexie);
     newBtnContainer.appendChild(document.createElement("br"));
-
+    
+    // 添加导出 csv 按钮
+    const btnExportCSV = createBtnS("保存为csv");
+    btnExportCSV.addEventListener("click", exportCSV);
+    
+    newBtnContainer.appendChild(btnExportCSV);
+    newBtnContainer.appendChild(document.createElement("br"));
+    
     // 添加设置 Notion 信息的按钮
     const btnNotionToken = createBtnS("输入Notion信息");
     btnNotionToken.addEventListener("click", notionInput);
-
+    
     newBtnContainer.appendChild(btnNotionToken);
     newBtnContainer.appendChild(document.createElement("br"));
-
-
-
+    
+    // notification
+    const noti = document.createElement("p");
+    noti.id = 'scriptNoti';
+    newBtnContainer.appendChild(noti);
+    
+    
+    
     // 为每个广播添加伪删除按钮​
     for (let i = 0; i < statuses.length; i++) {
       // 创建隐藏按钮
@@ -134,9 +146,13 @@
     let area = document.querySelector(".newBtnContainer");
     if (!area) {
       alert("脚本运行错误, 请刷新重试!");
-      return
+      return null;
+    }
+    if (document.getElementById('notion-token-form') !== null) {
+      return null;
     }
     let inputForm = document.createElement("form");
+    inputForm.id = 'notion-token-form';
     inputForm.addEventListener("submit", e => {
       e.preventDefault();
       checkNotionInput('NOTION_TOKEN', inputForm.elements.NOTION_TOKEN);
@@ -197,6 +213,10 @@
     localStorage.removeItem(name);
   }
 
+  const notification = (msg) => {
+    document.getElementById("scriptNoti").innerText = msg;
+  }
+
   // 备份该页的广播信息
   const backupStatuses = () => {
     updateStatuses();
@@ -204,14 +224,19 @@
     // extract status info from web
     const savedStatuses = [];
     for (let i = 0; i < statuses.length; i++) {
+      if (/deleted/.test(statuses[i].classList)){
+        continue;
+      }
       // extract pure text of status
       const match = statuses[i].innerText;
-      const full = match ? match.replace('\n', '').match(/^.*(?=\s\d*?回应.*)|^.+/s)[0] : "";
+      const full = match ? match.replace('\n', '')
+        .match(/^.*(?=\s\d*?回应.*)|^.+/s)[0] : "";
       let saying = "";
       if (match.indexOf("\n\n") > -1) {
         saying = match ? match.split('\n\n')[1] : "";
       } else {
-        const t = match ? match.replace('\n', '').match(/^(.*\s转发:)(.*)(?=\s\d*?回应.*)|^.+/s)[2] : "";
+        const t = match ? match.replace('\n', '')
+          .match(/^(.*\s转发:)(.*)(?=\s\d*?回应.*)|^.+/s)[2] : "";
         saying = t ? t.match(/^.*(?=\n.*)/)[0] : "";
       }
       let uid, sid, time, link;
@@ -220,11 +245,10 @@
       // author uid
       uid = statuses[i].getAttribute("data-uid");
       if (uid === null) {
-        uid = document.querySelector(".aside .content a").href.match(/(?<=https:\/\/www.douban.com\/people\/).*(?=\/)/);
-        link = statuses[i].querySelector(".created_at a").href;
-      } else {
-        link = `https://www.douban.com/people/${uid}/status/${sid}/`;
+        uid = document.querySelector(".aside .content a").href
+          .match(/(?<=https:\/\/www.douban.com\/people\/).*(?=\/)/);
       }
+      link = `https://www.douban.com/people/${uid}/status/${sid}/`;
       // status create time
       time = statuses[i].querySelector(".created_at").getAttribute("title");
 
@@ -238,13 +262,13 @@
         created: time
       }
       // img links
-      let pics = statuses[i].getElementsByClassName("pics-wrapper");
-      let picLinks = [];
+      let pics = statuses[i].querySelectorAll(".pics-wrapper img");
+      // console.log('pics', i, ':', pics);
       if (pics && pics.length > 0) {
-        picLinks = pics[0].innerHTML.match(/(?<=<img src=")(.*?)(?=".*>)/g);
-        picLinks.map((e, i) => {
-          row[`img${i}`] = e;
-        })
+        // console.log('status', i, 'adding pics');
+        for (let j = 0; j < pics.length; j++){
+          row[`img${j}`] = pics[j].src;
+        }
       }
       if (match) savedStatuses.push(row);
     }
@@ -261,8 +285,7 @@
 
     db.version(1).stores({
       status: `
-        id,sid,saying,full,uid,link,created,
-        img0,img1,img2,img3,img4,img5,img6,img7,img8,img9
+        id,sid,saying,full,uid,link,created
       `
     });
 
@@ -272,6 +295,7 @@
         console.log(`saved ${statuses.length} statuses.`);
         db.status.toCollection().count(count => {
           console.log(`Dexie current stores:`, count);
+          notification(`已保存 ${count} 个广播.`);
         })
         let nextPage = document.querySelector(".paginator span.next a").href;
         const cont = localStorage.getItem("cont");
@@ -290,9 +314,40 @@
   const clearDexie = () => {
     Dexie.delete(DB_NAME).then(() => {
       console.log("Database successfully deleted");
+      notification("已清空保存的广播.");
     }).catch((err) => {
       console.error("Could not delete database",err);
     });
+  }
+
+
+  const exportCSV = () => {
+    const db = new Dexie(DB_NAME);
+    db.version(1).stores({
+      status: `
+        id,sid,saying,full,uid,link,created
+      `
+    });
+    let pack = db.status.orderBy('created').reverse();
+    pack.toArray().then(data => {
+      data = data.map(e => {~
+        delete e.id;
+        return e;
+      })
+
+      let title = ['广播内容','广播带前缀','广播id','用户id','链接','时间','图片1','图片2',
+      '图片3','图片4','图片5','图片6','图片7','图片8','图片9'];
+      let key = ['saying','full','sid','uid','link','created', 'img0', 'img1','img2',
+      'img3','img4','img5','img6','img7','img8'];
+
+      JSonToCSV.setDataConver({
+        data: data,
+        fileName: 'test' + new Date().toISOString().
+          replace(/(\d{4}-\d{2}-d{2})T(\d{2}:\d{2}):\d{3}Z$/,'$1_$2'),
+        columns: {title, key}
+      })
+      console.log("pack:", data);
+    })
   }
 
 
