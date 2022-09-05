@@ -220,7 +220,7 @@
       if (pics && pics.length > 0) {
         // console.log('status', i, 'adding pics');
         for (let j = 0; j < pics.length; j++){
-          row[`img${j}`] = pics[j].src;
+          row[`img${j}`] = pics[j].src.replace('.webp','.jpg');
         }
       }
       if (match) savedStatuses.push(row);
