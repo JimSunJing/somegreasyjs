@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                SaveDoubanBoardcast
 // @namespace           https://github.com/JimSunJing
-// @version             0.1.0
+// @version             0.1.1
 // @description         Save douban Boardcast from douban website
 // @description:zh-cn   保存豆瓣广播内容到本地
 // @author              JimSunJing
