@@ -134,9 +134,9 @@
     inputForm.id = 'auto-form';
     inputForm.addEventListener("submit", e => {
       e.preventDefault();
-      alert(`form cont ${inputForm.elements.CONT.value}`);
+      // alert(`form cont ${inputForm.elements.CONT.value}`);
       localStorage.setItem("cont", Math.floor(Number(inputForm.elements.CONT.value)));
-      alert(`local storage cont: ${localStorage.getItem("cont")}`);
+      alert(`开始连续备份: ${localStorage.getItem("cont")}`);
       window.location.href = location.href + '&cont=' + localStorage.getItem("cont");
     })
     area.appendChild(inputForm);
