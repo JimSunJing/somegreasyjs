@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name                SaveDoubanBoardcast
+// @name                SaveDoubanBroadcast
 // @namespace           https://github.com/JimSunJing
 // @version             0.1.1
-// @description         Save douban Boardcast from douban website
+// @description         Save douban Broadcast from douban website
 // @description:zh-cn   保存豆瓣广播内容到本地
 // @author              JimSunJing
 // @match               https://www.douban.com/people/*/statuses*
@@ -14,7 +14,7 @@
   'use strict';
   // 获取网页中每个广播对象
   let statuses;
-  const DB_NAME = "dbBoardast";
+  const DB_NAME = "dbBroadast";
 
   // inject style
   const injectStyle = () => {
