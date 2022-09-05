@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                SaveDoubanBroadcast
 // @namespace           https://github.com/JimSunJing
-// @version             0.1.1
+// @version             0.1.2
 // @description         Save douban Broadcast from douban website
 // @description:zh-cn   保存豆瓣广播内容到本地
 // @author              JimSunJing
@@ -295,7 +295,7 @@
 
       JSonToCSV.setDataConver({
         data: data,
-        fileName: 'test' + new Date().toISOString(),
+        fileName: 'broadcastBackUp_' + new Date().toISOString(),
         columns: {title, key}
       })
       // console.log("pack:", data);
