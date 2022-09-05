@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name                SaveDoubanBroadcast
 // @namespace           https://github.com/JimSunJing
-// @version             0.1.2
+// @version             0.1.3
 // @description         Save douban Broadcast from douban website
 // @description:zh-cn   保存豆瓣广播内容到本地
 // @author              JimSunJing
@@ -252,7 +252,7 @@
         })
         let nextPage = document.querySelector(".paginator span.next a").href;
         const cont = localStorage.getItem("cont");
-        if (nextPage && cont !== null && Number(cont) > 0) {
+        if (statuses.length > 0 && nextPage && cont !== null && Number(cont) > 0) {
           nextPage = nextPage + `&cont=${Number(cont) - 1}`;
           localStorage.setItem("cont", Number(cont) - 1);
           window.location.href = nextPage;
