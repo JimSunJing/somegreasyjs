@@ -2,7 +2,7 @@
 // @name                SaveDoubanBroadcast
 // @name:zh-cn          备份个人豆瓣广播至本地
 // @namespace           https://github.com/JimSunJing
-// @version             0.1.3
+// @version             0.1.4
 // @description         Save douban Broadcast from douban website. Target page: douban.com/mine/statuses
 // @description:zh-cn   保存豆瓣广播内容到本地. 需要打开 douban.com/mine/statuses
 // @author              JimSunJing
@@ -138,7 +138,11 @@
       // alert(`form cont ${inputForm.elements.CONT.value}`);
       localStorage.setItem("cont", Math.floor(Number(inputForm.elements.CONT.value)));
       alert(`开始连续备份: ${localStorage.getItem("cont")}`);
-      window.location.href = location.href + '&cont=' + localStorage.getItem("cont");
+      if(location.href.indexOf("?p=") < 0) {
+        window.location.href = location.href + '?p=1&cont=' + localStorage.getItem("cont");
+      }else {
+        window.location.href = location.href + '&cont=' + localStorage.getItem("cont");
+      }
     })
     area.appendChild(inputForm);
 
