@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name                SaveDoubanBroadcast
+// @name:zh-cn          备份个人豆瓣广播至本地
 // @namespace           https://github.com/JimSunJing
 // @version             0.1.3
-// @description         Save douban Broadcast from douban website
-// @description:zh-cn   保存豆瓣广播内容到本地
+// @description         Save douban Broadcast from douban website. Target page: douban.com/mine/statuses
+// @description:zh-cn   保存豆瓣广播内容到本地. 需要打开 douban.com/mine/statuses
 // @author              JimSunJing
 // @match               https://www.douban.com/people/*/statuses*
 // @require             https://unpkg.com/dexie/dist/dexie.js
