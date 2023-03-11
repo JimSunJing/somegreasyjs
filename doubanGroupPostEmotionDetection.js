@@ -35,19 +35,65 @@
   class Data {
     constructor() {
       this.postStore = [];
-      this.analyseResult = [];
+      this.checkbox = [];
+      this.analyseButton;
+      this.analyseFlag = false;
     }
 
     addPost(posts) {
       this.postStore = this.postStore.concat(posts);
     }
 
+    getPostStore() {
+      return this.postStore;
+    }
+
     clearPost() {
       this.postStore = [];
     }
 
-    setAnalyseResult(result) {
-      this.analyseResult = result;
+    analysed() {
+      return this.analyseFlag;
+    }
+
+    addCheckbox(checkbox) {
+      this.checkbox.push(checkbox);
+    }
+
+    resetCheckbox() {
+      this.checkbox.forEach((element) => {
+        element.checked = true;
+      });
+    }
+
+    addAnalyseResult(result) {
+      const emotionMap = new Map();
+      result.map((post) => {
+        emotionMap.set(post.id, post.emotion);
+      });
+      this.postStore = this.postStore.map((post) => {
+        return {
+          ...post,
+          emotion: emotionMap.has(post.id)
+            ? emotionMap.get(post.id)
+            : "neutral",
+        };
+      });
+      this.analyseFlag = true;
+      this.resetCheckbox();
+      console.log("addAnalyseResult update:", this.postStore);
+    }
+
+    setAnalyseButton(button) {
+      this.analyseButton = button;
+    }
+
+    toggleAnalyseButton(disabled) {
+      if (disabled === true) {
+        this.analyseButton.disabled = true;
+      } else {
+        this.analyseButton.disabled = false;
+      }
     }
   }
 
@@ -55,30 +101,32 @@
 
   // extract douban group post title list from current page
   const getPosts = () => {
-    if (current.postStore.length > 0) {
+    if (current.getPostStore().length > 0) {
       console.log("already parsed posts");
       return;
     }
 
     // get all elements with class name 'td-subject'
-    const tdSubjects = document.querySelectorAll(".td-subject");
+    let tdSubjects = document.querySelectorAll(".td-subject");
+    // 进入小组后 class 改变（why??）
+    if (tdSubjects.length === 0) {
+      tdSubjects = document.querySelectorAll("td.title");
+    }
 
     // convert nodelist to array
     const posts = [];
 
     tdSubjects.forEach((tdSubject) => {
-      const parentElement = tdSubject.parentNode;
       posts.push({
-        id: tdSubject.children[0].getAttribute("href").split("/")[5],
-        title: tdSubject.textContent.trim(),
-        href: tdSubject.children[0].getAttribute("href"),
-        parentRef: parentElement,
+        id: tdSubject.querySelector("a").getAttribute("href").split("/")[5],
+        title: tdSubject.querySelector("a").textContent.trim(),
+        href: tdSubject.querySelector("a").getAttribute("href"),
       });
     });
 
     current.clearPost();
     current.addPost(posts);
-    console.log("posts", current.postStore);
+    // console.log("posts", current.getPostStore());
   };
 
   // load init button to Page HTML
@@ -87,7 +135,7 @@
     const style = document.createElement("style");
     style.innerHTML = `
       .greasy-button {
-        background-color: #edf4ed;
+        background-color: #f8fafc;
         color: black;
         padding: 3px 6px;
         margin: 3px;
@@ -101,7 +149,7 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        background-color: #fff6ed;
+        background-color: #f0f9ff;
         padding: 10px;
         margin: 10px 10px;
         border-radius: 10px;
@@ -140,8 +188,7 @@
       checkbox.type = "checkbox";
       checkbox.name = checkboxNames[i];
       checkbox.checked = true;
-      // disable before emotion check
-      // checkbox.setAttribute("disabled");
+      current.addCheckbox(checkbox);
       label.appendChild(checkbox);
       label.appendChild(document.createTextNode(" " + checkboxLabels[i]));
       container.appendChild(label);
@@ -149,8 +196,10 @@
       checkbox.addEventListener("change", function () {
         if (checkbox.checked) {
           console.log(checkbox.name, "is checked");
+          showPost(checkbox.name);
         } else {
           console.log(checkbox.name, "is not checked");
+          hidePost(checkbox.name);
         }
       });
     }
@@ -168,6 +217,7 @@
     // 要求 ChatGPT 分析情绪按钮
     const analyse = createBtn("AI分析");
     analyse.addEventListener("click", analyseTitles);
+    current.setAnalyseButton(analyse);
     newContainer.appendChild(analyse);
 
     // 用户输入 API KEY 按钮
@@ -182,10 +232,19 @@
     newContainer.insertAdjacentElement("afterend", checkboxWrap);
 
     // notification
+    const noteWrap = document.createElement("div");
+    noteWrap.classList.add("newContainer");
+    noteWrap.style.justifyContent = "center";
     const notification = document.createElement("p");
     notification.id = "scriptNotification";
-    notificationWrap.appendChild(notification);
-    checkboxWrap.insertAdjacentElement("afterend", notification);
+    notification.innerText = "豆瓣帖子情绪过滤";
+    noteWrap.appendChild(notification);
+    checkboxWrap.insertAdjacentElement("afterend", noteWrap);
+  };
+
+  // notification message
+  const sendNotification = (msg) => {
+    document.getElementById("scriptNotification").innerText = msg;
   };
 
   // create api connect session using axios
@@ -210,7 +269,7 @@
     getPosts();
     let prompt = `I want you to modify a JSON object array. You need to detect and classify each object's title text emotion, classify them into 3 types: 'positive', 'neutral', 'negative'. You need to add your classification result into the JSON object array as 'emotion' property, do not change other property. And then you need to only reply this JSON object array, when you reply you need to remove the title property. Only reply JSON object arrat, do not reply other text. Here are the JSON object array I provide: `;
     const titleJson = JSON.stringify(
-      current.postStore.map((post, index) => ({
+      current.getPostStore().map((post, index) => ({
         title: post.title,
         id: post.id,
       }))
@@ -223,39 +282,85 @@
       console.log("analyseTitles aborted");
     }
     // run title emotion analyse
+    sendNotification("AI正在分析...");
+    current.toggleAnalyseButton(true);
     openaiAxios
       .post("chat/completions", {
         model: "gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
+        temperature: 0.2,
       })
       .then((response) => {
-        console.log(response.data);
+        // console.log(response.data);
+        current.toggleAnalyseButton(false);
         const data = response.data.choices[0].message.content;
-        // Define the regex pattern
+        // regex for JSON array
         const regex = /\[[^\]]*\{[^}]*\}[^\]]*\]/;
-
         // Use the RegExp 'exec' method to extract the JSON object array
         const match = regex.exec(data);
-
         if (match !== null) {
-          // The regex matched at least one JSON object array, so we can extract it
           const jsonArray = JSON.parse(match[0]);
-
-          console.log("parse result array:", jsonArray);
-          current.setAnalyseResult(jsonArray);
+          // console.log("parse result array:", jsonArray);
+          current.addAnalyseResult(jsonArray);
         } else {
           throw new Error("No JSON object array found in the string.");
         }
+        // save results, push finished notificatio to HTML
+        sendNotification("AI分析完毕!");
       })
       .catch((error) => {
         console.error(error);
+        sendNotification("错误: " + error.message);
       });
-    // save results, push finished notificatio to HTML
   };
 
   // hide unselected post
-  const hidePost = () => {};
+  const hidePost = (emotion) => {
+    if (!current.analyseFlag) {
+      sendNotification("AI 还没分析.");
+      return;
+    }
+    try {
+      current
+        .getPostStore()
+        .filter((post) => post.emotion === emotion)
+        .map((post) => {
+          let postElement = document.querySelector(`a[href="${post.href}"]`)
+            .parentNode.parentNode;
+
+          if (postElement && !postElement.hasAttribute("hidden")) {
+            postElement.setAttribute("hidden", true);
+          }
+        });
+    } catch (error) {
+      console.log(error);
+      sendNotification("错误:", error);
+    }
+  };
+
+  // show post
+  const showPost = (emotion) => {
+    if (!current.analyseFlag) {
+      sendNotification("AI 还没分析.");
+      return;
+    }
+    try {
+      current
+        .getPostStore()
+        .filter((post) => post.emotion === emotion)
+        .map((post) => {
+          let postElement = document.querySelector(`a[href="${post.href}"]`)
+            .parentNode.parentNode;
+
+          if (postElement && postElement.hasAttribute("hidden")) {
+            postElement.removeAttribute("hidden");
+          }
+        });
+    } catch (error) {
+      console.log(error);
+      sendNotification("错误:", error);
+    }
+  };
 
   const init = () => {
     console.log("Hello, Douban Post Emotion Detection");
